@@ -426,9 +426,13 @@ def forecast(input, target, encoder, decoder):
 def avg_batch_MAE(real, pred):
     MAE = 0
     MAPE = 0
+    if (pred.ndim == 1):
+        pred_reshaped = np.expand_dims(pred, axis = 0)
+    else:
+        pred_reshaped = pred
     for i in range(real.shape[0]):
         real_array = real[i]
-        pred_array = pred[i]
+        pred_array = pred_reshaped[i]
         zero_indices = np.where(real_array==0)[0]
         real_array_wo_zeros = np.delete(real_array,zero_indices)
         pred_array_wo_zeros = np.delete(pred_array, zero_indices)

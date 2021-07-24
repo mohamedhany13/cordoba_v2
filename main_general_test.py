@@ -11,7 +11,7 @@ import time
 input_window = 10
 input_years = 1
 input_length, months_per_year, num_windows_per_month = get_input_length(input_window, input_years)
-output_length = 3
+output_length = 7
 input_features = 8
 output_features = 1
 validation_split = 0.3
@@ -35,7 +35,7 @@ resnet_ffinput_units= get_resnet_units(input_features,input_window, kernel_size,
 
 region = "Cordoba"
 area_code = "06"
-series = load_dataset(region, area_code, normalize= True)
+series = load_dataset(region, area_code, normalize= False)
 
 # split data into training set, development set, test set
 train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
@@ -48,7 +48,8 @@ x_dev, x_target_dev, y_dev = split_sequence(dev_set, input_length, output_length
 x_test, x_target_test, y_test = split_sequence(test_set, input_length, output_length, area_code)
 
 # Initialize optimizer and loss functions
-optimizer = tf.keras.optimizers.Adam()
+#optimizer = tf.keras.optimizers.Adam()
+optimizer = tf.keras.optimizers.Adam( learning_rate= 0.02)
 loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
 
 encoder = custom_layers_models.CRNN_encoder(rnn_units, kernel_size, num_kernels,
