@@ -474,6 +474,10 @@ def split_dataframe_train_dev_test(input_series, validation_split, test_split):
     return train_set, dev_set, test_set
 
 def get_input_length(input_window, input_years):
+    if input_window == 1:
+        # assume 1 year has 360 days
+        months_per_year = 12
+        num_windows_per_month = 30
     if input_window == 7:
         # assume 1 year has 364 days
         months_per_year = 13
@@ -492,6 +496,15 @@ def get_input_length(input_window, input_years):
         num_windows_per_month = 1
     input_length = input_window * num_windows_per_month * months_per_year * input_years
     return input_length, months_per_year, num_windows_per_month
+
+def plot_pred_vs_target(target, pred):
+
+    plt.plot(pred, color='r', label='prediced output')
+    plt.plot(target, color='b', label='real output')
+    # Adding legend, which helps us recognize the curve according to it's color
+    plt.legend()
+    # To load the display window
+    plt.show()
 
 
 

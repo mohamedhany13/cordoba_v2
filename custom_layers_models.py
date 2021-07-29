@@ -355,9 +355,8 @@ class CRNN_auto_decoder(tf.keras.Model):
 
 # Encoder class
 class Encoder(tf.keras.Model):
-  def __init__(self, enc_units, batch_size = 0, enc_regularization = None, enc_dropout = 0):
+  def __init__(self, enc_units, enc_regularization = None, enc_dropout = 0):
     super().__init__()
-    self.batch_size = batch_size
     self.enc_units = enc_units
 
     # LSTM Layer
@@ -373,13 +372,9 @@ class Encoder(tf.keras.Model):
                                    recurrent_dropout = enc_dropout)
 
   # Encoder network comprises an lstm layer
-  def call(self, input_sequence, hidden = 0):
+  def call(self, input_sequence):
     y, h_last, c_last = self.lstm(input_sequence)
     return y, h_last, c_last
-
-  # To initialize the hidden state
-  #def initialize_hidden_state(self):
-    #return tf.zeros((self.enc_units,))
 
 # Attention Mechanism
 class Attention_Layer(tf.keras.layers.Layer):
@@ -431,11 +426,10 @@ class Attention_Layer(tf.keras.layers.Layer):
 # Decoder class
 class Decoder(tf.keras.Model):
   def __init__(self, dec_lstm_units, n_output_features,
-               attention_units, batch_sz = 0,
+               attention_units,
                Dense_activation = "relu",
                dec_regularization = None, dec_dropout = 0):
     super().__init__()
-    self.batch_sz = batch_sz
     self.dec_lstm_units = dec_lstm_units
     self.n_output_features = n_output_features
     self.lstm = tf.keras.layers.LSTM(self.dec_lstm_units,

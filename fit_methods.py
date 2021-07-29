@@ -158,3 +158,58 @@ def train_step_CRNN(inp, target_inp, target_out, encoder, decoder, optimizer, lo
 
     #return output, ste_loss, ste_MAE, ste_MAPE, batch_loss, variables
     return output, batch_loss, variables
+
+@tf.function
+def train_step_attention(inp, target_out, encoder, decoder, optimizer, loss_object, output_features):
+
+    loss = 0
+    # tf.GradientTape() -- record operations for automatic differentiation
+    with tf.GradientTape() as tape:
+
+        # encoder step
+
+        enc_out, h_enc, c_enc = encoder(inp)
+
+        output = []
+        S_prev_dec_0 = tf.zeros((inp.shape[0], decoder.RNN_num_units))
+        S_prev_dec = S_prev_dec_0
+        c_prev_dec_0 = tf.zeros((inp.shape[0], decoder.RNN_num_units))
+        c_prev_dec = c_prev_dec_0
+        y_prev_0 = tf.zeros((inp.shape[0], 1, output_features))
+        y_prev = y_prev_0
+        # Teacher forcing - feeding the target as the next input
+        for t in range(target_out.shape[1]):
+
+            # Pass enc_output to the decoder
+            y_pred, S_dec, c_dec, attention_weights = decoder(y_prev, S_prev_dec, c_prev_dec, enc_out)
+            y_real = tf.expand_dims(target_out[:, t], axis = 1)
+            y_pred_reshaped = tf.reshape(y_pred, (y_pred.shape[0], y_pred.shape[-1]))
+            # Compute the loss
+            current_batch_loss = loss_function(y_real, y_pred_reshaped, loss_object)
+            loss += current_batch_loss
+
+            # Use teacher forcing
+            #y_prev = y_real
+            y_prev = y_pred
+            S_prev_dec = S_dec
+            c_prev_dec = c_dec
+            output.append(y_pred_reshaped)
+
+    # compute average loss per time step per batch (this function is executed per batch)
+    # (output of loss function is average of the whole batch)
+    batch_loss = (loss / int(target_out.shape[1]))
+
+    # compute average single training example MAE & MAPE
+    #ste_MAE, ste_MAPE = avg_batch_MAE(targ, output)
+
+    # Get the model's variables
+    variables = encoder.trainable_variables + decoder.trainable_variables
+
+    # Compute the gradients
+    gradients = tape.gradient(loss, variables)
+
+    # Update the variables of the model/network
+    optimizer.apply_gradients(zip(gradients, variables))
+
+    #return output, ste_loss, ste_MAE, ste_MAPE, batch_loss, variables
+    return output, batch_loss, variables

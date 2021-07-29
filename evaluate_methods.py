@@ -177,3 +177,31 @@ def evaluate_CRNN(inp, target_inp, target_out, encoder, decoder, encoder_lstm_un
     batch_MAE, batch_MAPE = avg_batch_MAE(target_out, output_pred_array)
 
     return output_pred_array, batch_MAE, batch_MAPE
+
+def evaluate_attention(inp, target_out, encoder, decoder, output_features):
+
+    enc_out, h_enc, c_enc = encoder(inp)
+
+    output = []
+    S_prev_dec_0 = tf.zeros((inp.shape[0], decoder.RNN_num_units))
+    S_prev_dec = S_prev_dec_0
+    c_prev_dec_0 = tf.zeros((inp.shape[0], decoder.RNN_num_units))
+    c_prev_dec = c_prev_dec_0
+    y_prev_0 = tf.zeros((inp.shape[0], 1, output_features))
+    y_prev = y_prev_0
+
+    for t in range(target_out.shape[1]):
+
+        # Pass enc_output to the decoder
+        y_pred, S_dec, c_dec, new_attention_weights = decoder(y_prev, S_prev_dec, c_prev_dec, enc_out)
+        y_pred_reshaped = tf.reshape(y_pred, (y_pred.shape[0], y_pred.shape[-1]))
+
+        y_prev = y_pred
+        S_prev_dec = S_dec
+        c_prev_dec = c_dec
+        output.append(y_pred_reshaped)
+
+    output_pred_array = conv_tensor_array(output)
+    batch_MAE, batch_MAPE = avg_batch_MAE(target_out, output_pred_array)
+
+    return output_pred_array, batch_MAE, batch_MAPE
