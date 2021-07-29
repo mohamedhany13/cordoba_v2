@@ -425,14 +425,14 @@ class Attention_Layer(tf.keras.layers.Layer):
 
 # Decoder class
 class Decoder(tf.keras.Model):
-  def __init__(self, dec_lstm_units, n_output_features,
+  def __init__(self, RNN_num_units, n_output_features,
                attention_units,
                Dense_activation = "relu",
                dec_regularization = None, dec_dropout = 0):
     super().__init__()
-    self.dec_lstm_units = dec_lstm_units
+    self.RNN_num_units = RNN_num_units
     self.n_output_features = n_output_features
-    self.lstm = tf.keras.layers.LSTM(self.dec_lstm_units,
+    self.lstm = tf.keras.layers.LSTM(self.RNN_num_units,
                                    return_sequences=True,
                                    return_state=True,
                                    recurrent_initializer='glorot_uniform',

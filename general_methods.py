@@ -7,7 +7,7 @@ import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 
-def load_dataset(region, area_code, normalize = "False"):
+def load_dataset(region, area_code, normalize = False, swap = True):
     file_path = "C:\\Users\\moham\\Desktop\\masters\\master_thesis\\time_series_analysis\\data_set\\" + region + ".csv"
     series = pd.read_csv(file_path, index_col=0, parse_dates=True, dayfirst=True)
     series['year'] = series.index.year
@@ -55,7 +55,7 @@ def load_dataset(region, area_code, normalize = "False"):
     series[evapotranspiration][series[evapotranspiration] == "n/d"] = 0
     series[evapotranspiration] = pd.to_numeric(series[evapotranspiration], downcast="float")
 
-    if normalize == "True":
+    if normalize == True:
         max_temp_mean = series[max_temp].mean()
         max_temp_stddev = series[max_temp].std()
         series[max_temp] = (series[max_temp] - max_temp_mean)
@@ -96,8 +96,9 @@ def load_dataset(region, area_code, normalize = "False"):
         series[evapotranspiration] = (series[evapotranspiration] - evapotranspiration_mean)
         series[evapotranspiration] = series[evapotranspiration] / evapotranspiration_stddev
 
-    series = swap_dataframe_cols(series, 3, 6)
-    series = swap_dataframe_cols(series, 4, 7)
+    if (swap == True):
+        series = swap_dataframe_cols(series, 3, 6)
+        series = swap_dataframe_cols(series, 4, 7)
 
 
     return series
@@ -494,7 +495,7 @@ def get_input_length(input_window, input_years):
         # assume 1 year has 360 days
         months_per_year = 12
         num_windows_per_month = 1
-    input_length = input_window * num_windows_per_month * months_per_year * input_years
+    input_length = int(input_window * num_windows_per_month * months_per_year * input_years)
     return input_length, months_per_year, num_windows_per_month
 
 def plot_pred_vs_target(target, pred):

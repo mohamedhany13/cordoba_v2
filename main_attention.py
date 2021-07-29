@@ -15,9 +15,9 @@ sim_mode = "train"
 
 normalize_dataset = True
 input_window = 1
-input_years = 1
+input_years = 0.1
 input_length, months_per_year, num_windows_per_month = get_input_length(input_window, input_years)
-output_length = 9
+output_length = 5
 input_features = 8
 output_features = 1
 validation_split = 0.2
@@ -29,7 +29,7 @@ att_dense_units_1st = 128
 
 region = "Cordoba"
 area_code = "06"
-series = load_dataset(region, area_code, normalize= normalize_dataset)
+series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False)
 
 # split data into training set, development set, test set
 train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)

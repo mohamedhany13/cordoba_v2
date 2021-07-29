@@ -175,7 +175,7 @@ def train_step_attention(inp, target_out, encoder, decoder, optimizer, loss_obje
         S_prev_dec = S_prev_dec_0
         c_prev_dec_0 = tf.zeros((inp.shape[0], decoder.RNN_num_units))
         c_prev_dec = c_prev_dec_0
-        y_prev_0 = tf.zeros((inp.shape[0], 1, output_features))
+        y_prev_0 = tf.zeros((inp.shape[0], output_features))
         y_prev = y_prev_0
         # Teacher forcing - feeding the target as the next input
         for t in range(target_out.shape[1]):
