@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 
 def load_dataset(region, area_code, normalize = False, swap = True):
-    file_path = "C:\\Users\\moham\\Desktop\\masters\\master_thesis\\time_series_analysis\\data_set\\" + region + ".csv"
+    file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
     series = pd.read_csv(file_path, index_col=0, parse_dates=True, dayfirst=True)
     series['year'] = series.index.year
     series['month'] = series.index.month

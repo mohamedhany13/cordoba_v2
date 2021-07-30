@@ -11,6 +11,7 @@ import time
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
+# continue training with previous weights ==> "train_cont"
 sim_mode = "train"
 
 normalize_dataset = True
@@ -56,7 +57,11 @@ checkpoint = tf.train.Checkpoint(optimizer=optimizer,
                                  encoder=encoder,
                                  decoder=decoder)
 
-if (sim_mode == "train"):
+if (sim_mode == "train" or sim_mode == "train_cont"):
+
+    if (sim_mode == "train_cont"):
+        # Restore the latest checkpoint in checkpoint_dir
+        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
     # get number of batches for train set
     num_batches_train = int(x_train.shape[0] / batch_size)
