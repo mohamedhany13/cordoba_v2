@@ -8,17 +8,21 @@ from fit_methods import train_step_CRNN_auto_enc, train_step_CRNN, train_step_at
 import os
 import time
 
+# type in NN architecture under investigation (this is to save different checkpoints for each architecture)
+NN_arch = "transformer"
+# choose OS type (linux or windows)
+OS = "linux"
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
 sim_mode = "train"
 
-normalize_dataset = True
+normalize_dataset = False
 input_window = 1
-input_years = 0.1
+input_years = 3
 input_length, months_per_year, num_windows_per_month = get_input_length(input_window, input_years)
-output_length = 5
+output_length = 30
 input_features = 8
 output_features = 1
 validation_split = 0.2
@@ -30,10 +34,11 @@ att_dense_units_1st = 128
 
 region = "Cordoba"
 area_code = "06"
-series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False)
-
+series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
+# randomize the training set to better train the model instead of having nearly similar training examples in each batch
+series_shuffled = series.sample(frac = 1)
 # split data into training set, development set, test set
-train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
+train_set, dev_set, test_set = split_dataframe_train_dev_test(series_shuffled, validation_split, test_split)
 
 # create the training set
 x_train, x_target_train, y_train = split_sequence(train_set, input_length, output_length, area_code)
@@ -51,13 +56,17 @@ encoder = custom_layers_models.Encoder(rnn_units)
 decoder = custom_layers_models.Decoder(rnn_units, output_features, att_dense_units_1st)
 
 # create a checkpoint instance
-checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt.txt")
+if (OS == "linux"):
+    checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+else:
+    checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".txt")
 checkpoint = tf.train.Checkpoint(optimizer=optimizer,
                                  encoder=encoder,
                                  decoder=decoder)
 
-if (sim_mode == "train" or sim_mode == "train_cont"):
+with tf.device('/gpu:0'):
+ if (sim_mode == "train" or sim_mode == "train_cont"):
 
     if (sim_mode == "train_cont"):
         # Restore the latest checkpoint in checkpoint_dir
@@ -135,8 +144,14 @@ if (sim_mode == "train" or sim_mode == "train_cont"):
             batch_target_input = x_target_dev[start_index: end_index]
             batch_output = y_dev[start_index: end_index]
 
-            output_dev, batch_MAE_dev, batch_MAPE_dev = evaluate_attention(batch_input, batch_output,
-                                                                           encoder, decoder, output_features)
+            output_dev = evaluate_attention(batch_input, batch_output,
+                                            encoder, decoder, output_features)
+
+            #batch_MAE_dev = 0
+            #batch_MAPE_dev = 0
+            output_dev_pred_array = conv_tensor_array(output_dev)
+            # compute MAE & MAPE (per epoch)
+            batch_MAE_dev, batch_MAPE_dev = avg_batch_MAE(batch_output, output_dev_pred_array)
 
             dev_total_MAE += batch_MAE_dev
             dev_total_MAPE += batch_MAPE_dev
@@ -153,7 +168,7 @@ if (sim_mode == "train" or sim_mode == "train_cont"):
     total_train_time = time.time() - train_start_time
     print("total training time = {}".format(total_train_time))
 
-else:
+ else:
     # Restore the latest checkpoint in checkpoint_dir
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
@@ -177,9 +192,11 @@ else:
         batch_target_input = x_target_test[start_index: end_index]
         batch_output = y_test[start_index: end_index]
 
-        output_test, batch_MAE_test, batch_MAPE_test = evaluate_attention(batch_input, batch_output,
-                                                                  encoder, decoder, output_features)
+        output_test = evaluate_attention(batch_input, batch_output,
+                                         encoder, decoder, output_features)
 
+        output_test_pred_array = conv_tensor_array(output_test)
+        batch_MAE_test, batch_MAPE_test = avg_batch_MAE(batch_output, output_test_pred_array)
         test_total_MAE += batch_MAE_test
         test_total_MAPE += batch_MAPE_test
 

@@ -178,6 +178,7 @@ def evaluate_CRNN(inp, target_inp, target_out, encoder, decoder, encoder_lstm_un
 
     return output_pred_array, batch_MAE, batch_MAPE
 
+@tf.function
 def evaluate_attention(inp, target_out, encoder, decoder, output_features):
 
     enc_out, h_enc, c_enc = encoder(inp)
@@ -201,7 +202,8 @@ def evaluate_attention(inp, target_out, encoder, decoder, output_features):
         c_prev_dec = c_dec
         output.append(y_pred_reshaped)
 
-    output_pred_array = conv_tensor_array(output)
-    batch_MAE, batch_MAPE = avg_batch_MAE(target_out, output_pred_array)
+    #output_pred_array = conv_tensor_array(output)
+    #batch_MAE, batch_MAPE = avg_batch_MAE(target_out, output_pred_array)
 
-    return output_pred_array, batch_MAE, batch_MAPE
+    #return output_pred_array, batch_MAE, batch_MAPE
+    return output
