@@ -117,7 +117,6 @@ def swap_dataframe_cols(series, col1_index, col2_index):
     series.columns = col_list
     return series
 
-
 # split a multivariate sequence into samples
 def split_sequence(input_sequence, n_steps_in, n_steps_out, area_code):
     eva_trans = "Co" + area_code + "ETo"
@@ -158,165 +157,6 @@ def split_sequence_autoenc(input_sequence, n_steps_in, area_code):
         y.append(seq_y)
         target_x.append(seq_x_target)
     return array(x), array(target_x), array(y)
-
-
-# Loss function
-def loss_function(real, pred, loss_object):
-
-  # If there's a '0' in the sequence, the loss is being nullified
-  mask = tf.math.logical_not(tf.math.equal(real, 0))
-  loss_ = loss_object(real, pred)
-
-  mask = tf.cast(mask, dtype=loss_.dtype)
-  #loss_ *= mask
-
-  return tf.reduce_mean(loss_)
-# mean batch loss?
-
-
-@tf.function
-def train_step(inp, targ, encoder, decoder, optimizer, loss_object):
-  loss = 0
-
-  # tf.GradientTape() -- record operations for automatic differentiation
-  with tf.GradientTape() as tape:
-    enc_output, h_enc, c_enc = encoder(inp)
-
-    h_dec_prev = h_enc
-    c_dec_prev = c_enc
-
-    # first y_prev is all zeros
-    y_prev = tf.zeros((targ.shape[0], decoder.n_output_features))
-    #y_prev = tf.expand_dims(y_prev, axis = 1)
-    output = []
-    # Teacher forcing - feeding the target as the next input
-    for t in range(targ.shape[1]):
-
-      # Pass enc_output to the decoder
-      y_pred, h_dec, c_dec, attention_weights = decoder(y_prev, h_dec_prev, c_dec_prev, enc_output)
-      y_real = tf.expand_dims(targ[:, t], axis = 1)
-      # Compute the loss
-      loss += loss_function(y_real, y_pred, loss_object)
-
-      # Use teacher forcing
-      y_prev = y_real
-      h_dec_prev = h_dec
-      c_dec_prev = c_dec
-      output.append(y_pred)
-
-  # As this function is called per batch, compute the batch_loss
-  batch_loss = (loss / int(targ.shape[1]))
-
-  # Get the model's variables
-  variables = encoder.trainable_variables + decoder.trainable_variables
-
-  # Compute the gradients
-  gradients = tape.gradient(loss, variables)
-
-  # Update the variables of the model/network
-  optimizer.apply_gradients(zip(gradients, variables))
-
-  return output, batch_loss, variables
-
-@tf.function
-def train_step(inp, targ, encoder, decoder, optimizer, loss_object):
-  loss = 0
-
-  # tf.GradientTape() -- record operations for automatic differentiation
-  with tf.GradientTape() as tape:
-    enc_output, h_enc, c_enc = encoder(inp)
-
-    h_dec_prev = h_enc
-    c_dec_prev = c_enc
-
-    # first y_prev is all zeros
-    y_prev = tf.zeros((targ.shape[0], decoder.n_output_features))
-    #y_prev = tf.expand_dims(y_prev, axis = 1)
-    output = []
-    # Teacher forcing - feeding the target as the next input
-    for t in range(targ.shape[1]):
-
-      # Pass enc_output to the decoder
-      y_pred, h_dec, c_dec, attention_weights = decoder(y_prev, h_dec_prev, c_dec_prev, enc_output)
-      y_real = tf.expand_dims(targ[:, t], axis = 1)
-      # Compute the loss
-      loss += loss_function(y_real, y_pred, loss_object)
-
-      # Use teacher forcing
-      y_prev = y_real
-      h_dec_prev = h_dec
-      c_dec_prev = c_dec
-      output.append(y_pred)
-
-  # As this function is called per batch, compute the batch_loss
-  batch_loss = (loss / int(targ.shape[1]))
-
-  # Get the model's variables
-  variables = encoder.trainable_variables + decoder.trainable_variables
-
-  # Compute the gradients
-  gradients = tape.gradient(loss, variables)
-
-  # Update the variables of the model/network
-  optimizer.apply_gradients(zip(gradients, variables))
-
-  return output, batch_loss, variables
-
-@tf.function
-def train_step_v1(inp, targ, encoder, decoder, optimizer, loss_object, num_weeks, encoder_units):
-  loss = 0
-
-  # tf.GradientTape() -- record operations for automatic differentiation
-  with tf.GradientTape() as tape:
-    h_enc_0= tf.zeros((inp.shape[0],encoder_units))
-    c_enc_0= tf.zeros((inp.shape[0],encoder_units))
-    h_enc_prev, c_enc_prev = h_enc_0, c_enc_0
-    for i in range(num_weeks):
-        start_index = i * 7
-        end_index = start_index + 7
-        input = inp[:,start_index:end_index,:]
-        enc_output, h_enc, c_enc = encoder(input, h_enc_prev, c_enc_prev)
-        h_enc_prev = h_enc
-        c_enc_prev = c_enc
-
-    h_dec_prev = h_enc
-    c_dec_prev = c_enc
-
-    # first y_prev is all zeros
-    y_prev = tf.zeros((targ.shape[0], decoder.n_output_features))
-    y_prev = tf.expand_dims(y_prev, axis = 1)
-    output = []
-    # Teacher forcing - feeding the target as the next input
-    for t in range(targ.shape[1]):
-
-      # Pass enc_output to the decoder
-      y_pred, h_dec, c_dec = decoder(h_dec_prev, c_dec_prev, y_prev)
-      y_real = tf.expand_dims(targ[:, t], axis = 1)
-      y_pred_reshaped = tf.reshape(y_pred, (y_pred.shape[0], y_pred.shape[-1]))
-      # Compute the loss
-      loss += loss_function(y_real, y_pred_reshaped, loss_object)
-
-      # Use teacher forcing
-      #y_prev = y_real
-      y_prev = y_pred
-      h_dec_prev = h_dec
-      c_dec_prev = c_dec
-      output.append(y_pred_reshaped)
-
-  # As this function is called per batch, compute the batch_loss
-  batch_loss = (loss / int(targ.shape[1]))
-
-  # Get the model's variables
-  variables = encoder.trainable_variables + decoder.trainable_variables
-
-  # Compute the gradients
-  gradients = tape.gradient(loss, variables)
-
-  # Update the variables of the model/network
-  optimizer.apply_gradients(zip(gradients, variables))
-
-  return output, batch_loss, variables
-
 
 # Evaluate function -- similar to the training loop
 # target is input with shape assuming batch (3-dimensional)
@@ -386,8 +226,6 @@ def evaluate_autoenc(input, target, encoder, decoder, num_weeks):
     MAE, MAPE = avg_batch_MAE(target, output_pred_array)
     return output_pred, MAE, MAPE
 
-
-
 # Function for plotting the attention weights
 def plot_attention(attention, input, output):
     fig = plt.figure(figsize=(10,10))
@@ -403,7 +241,6 @@ def plot_attention(attention, input, output):
     ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
 
     plt.show(block=False)
-
 
 # Translate function (which internally calls the evaluate function)
 def forecast(input, target, encoder, decoder):
@@ -426,7 +263,6 @@ def forecast(input, target, encoder, decoder):
     #plot_attention(attention_plot, input.split(' '), output_pred.split(' '))
 
     return MAE
-
 
 def avg_batch_MAE(real, pred):
     MAE = 0
@@ -510,6 +346,19 @@ def plot_pred_vs_target(target, pred):
     plt.legend()
     # To load the display window
     plt.show()
+
+def get_batch_data(batch_num, batch_size, x, y):
+
+    # get the current batch data
+    start_index = batch_num * batch_size
+    end_index = start_index + batch_size
+    if (end_index > x.shape[0]):
+        end_index = x.shape[0]
+    batch_input = x[start_index: end_index]
+    #batch_target_input = x_target_train[start_index: end_index]
+    batch_output = y[start_index: end_index]
+
+    return batch_input, batch_output
 
 
 
