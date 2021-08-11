@@ -78,7 +78,8 @@ transformer = transformer_layers.Transformer(
 
 # create a checkpoint instance
 if (OS == "linux"):
-    checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+    #checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+    checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
 else:
     checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".txt")
