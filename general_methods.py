@@ -9,6 +9,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 
 def load_dataset(region, area_code, normalize = False, swap = True, OS = "linux"):
     if (OS == "linux"):
+        # linux path
         file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
         #file_path = "/home/mohamed-hany/Downloads/" + region + ".csv"
     else:

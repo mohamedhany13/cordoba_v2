@@ -138,6 +138,7 @@ with tf.device('/gpu:0'):
         print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs, in minutes: {(time.time() - start)/60:.2f} mins\n')
 
     total_train_time = time.time() - train_start_time
+    # save total train time
     print("total training time = {} sec, in minutes: {} mins".format(total_train_time, total_train_time/60))
 
  else:
