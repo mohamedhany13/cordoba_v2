@@ -14,12 +14,12 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
 NN_arch = "transformer"
 # choose OS type (linux or windows)
-OS = "windows"
+OS = "linux"
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
-sim_mode = "train"
+sim_mode = "train_cont"
 
 normalize_dataset = True
 input_length = 365
@@ -31,24 +31,30 @@ test_split = 0.1
 batch_size = 64
 EPOCHS = 500
 
-num_layers = 3
-num_heads = 4
+num_layers = 8
+num_heads = 8
 d_model = 128
 # dff is number of units output from non-linear dense layer in the feed-forward block
-dff = 64
+dff = 128
 dropout_rate = 0.1
 
 region = "Cordoba"
 area_code = "06"
 series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
 # randomize the training set to better train the model instead of having nearly similar training examples in each batch
-series_shuffled = series.sample(frac = 1)
+#series_shuffled = series.sample(frac = 1)
 # split data into training set, development set, test set
-train_set, dev_set, test_set = split_dataframe_train_dev_test(series_shuffled, validation_split, test_split)
+train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
 
 # create the training set
 x_train, x_target_train, y_train = split_sequence(train_set, input_length, output_length, area_code)
 y_train = y_train[..., np.newaxis]
+
+# shuffle the training set
+shuffler = np.random.permutation(x_train.shape[0])
+x_train = x_train[shuffler]
+x_target_train = x_target_train[shuffler]
+y_train = y_train[shuffler]
 # create the dev set
 x_dev, x_target_dev, y_dev = split_sequence(dev_set, input_length, output_length, area_code)
 y_dev = y_dev[..., np.newaxis]
@@ -78,11 +84,11 @@ transformer = transformer_layers.Transformer(
 
 # create a checkpoint instance
 if (OS == "linux"):
-    #checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
-    checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
+    checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+    #checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
 else:
     checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".txt")
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".ckpt")
 checkpoint = tf.train.Checkpoint(transformer = transformer, optimizer = optimizer)
 ckpt_manager = tf.train.CheckpointManager(checkpoint, checkpoint_prefix, max_to_keep=5)
 
@@ -91,7 +97,7 @@ with tf.device('/gpu:0'):
 
     if (sim_mode == "train_cont"):
         # Restore the latest checkpoint in checkpoint_dir
-        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_prefix))
         print("latest checkpoint loaded")
 
     # get number of batches for train set
@@ -132,7 +138,7 @@ with tf.device('/gpu:0'):
         print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs, in minutes: {(time.time() - start)/60:.2f} mins\n')
 
     total_train_time = time.time() - train_start_time
-    print("total training time = {}".format(total_train_time))
+    print("total training time = {} sec, in minutes: {} mins".format(total_train_time, total_train_time/60))
 
  else:
     # Restore the latest checkpoint in checkpoint_dir

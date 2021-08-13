@@ -9,8 +9,8 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 
 def load_dataset(region, area_code, normalize = False, swap = True, OS = "linux"):
     if (OS == "linux"):
-        #file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
-        file_path = r"/home/mohamed-hany/Downloads/" + region + ".csv"
+        file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
+        #file_path = "/home/mohamed-hany/Downloads/" + region + ".csv"
     else:
         file_path = "C:\\Users\\moham\\Desktop\\masters\\master_thesis\\time_series_analysis\\data_set\\" + region + ".csv"
 
@@ -122,6 +122,7 @@ def swap_dataframe_cols(series, col1_index, col2_index):
 def split_sequence(input_sequence, n_steps_in, n_steps_out, area_code):
     eva_trans = "Co" + area_code + "ETo"
     x, target_x, y = list(), list(), list()
+    x_list_arr = list()
     for i in range (len(input_sequence)):
         # find the end of this pattern
         end_ix = i + n_steps_in
@@ -137,7 +138,11 @@ def split_sequence(input_sequence, n_steps_in, n_steps_out, area_code):
         x.append(seq_x)
         y.append(seq_y)
         target_x.append(seq_x_target)
-    return array(x), array(target_x), array(y)
+        x_list_arr.append(array(seq_x))
+    target_x_arr, y_arr = array(target_x), array(y)
+    #x_arr = array(x)
+    x_arr = array(x_list_arr)
+    return x_arr, target_x_arr, y_arr
 
 # split a multivariate sequence into samples
 def split_sequence_autoenc(input_sequence, n_steps_in, area_code):
