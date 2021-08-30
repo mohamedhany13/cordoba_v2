@@ -14,6 +14,8 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 NN_arch = "autoregressive_attention"
 # choose OS type (linux or windows)
 OS = "windows"
+# choose 1 to use path in drive, 0 to use path in downloads (for linux only)
+linux_path = 0
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
@@ -36,7 +38,8 @@ dropout_rate = 0.1
 
 region = "Cordoba"
 area_code = "06"
-series = general_methods.load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
+series = general_methods.load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS,
+                                      linux_path = linux_path)
 
 x_train, y_train, x_dev, y_dev,\
 x_test, y_test = general_methods.generate_train_dev_test_sets(series, validation_split, test_split,
@@ -57,10 +60,9 @@ attention_model = lstm_att_layers.attention_model(output_features, lstm_units, a
 #dot_img_file = "C:\\Users\\moham\\Desktop\\model.png"
 #tf.keras.utils.plot_model(enc_dec_model, to_file=dot_img_file, show_shapes=True)
 
-#autoreg_att_model.run_eagerly = True
 
 checkpoint, checkpoint_prefix, ckpt_manager = general_methods.create_checkpoint(OS, NN_arch,
-                                                                                autoreg_att_model, optimizer)
+                                                                                autoreg_att_model, optimizer, linux_path)
 # testing of model before training:
 general_methods.test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, autoreg_att_model,
                                      test_accuracy, batch_size, lstm_units)

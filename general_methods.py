@@ -9,11 +9,13 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 import lstm_att_layers
 import seaborn as sns
 
-def load_dataset(region, area_code, normalize = False, swap = True, OS = "linux"):
+def load_dataset(region, area_code, normalize = False, swap = True, OS = "linux", linux_path = 0):
     if (OS == "linux"):
         # linux path
-        file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
-        #file_path = "/home/mohamed-hany/Downloads/" + region + ".csv"
+        if (linux_path == 1):
+            file_path = "/media/hamamgpu/Drive3/mohamed-hany/" + region + ".csv"
+        else:
+            file_path = "/home/mohamed-hany/Downloads/" + region + ".csv"
     else:
         file_path = "C:\\Users\\moham\\Desktop\\masters\\master_thesis\\time_series_analysis\\data_set\\" + region + ".csv"
 
@@ -203,11 +205,13 @@ def generate_train_dev_test_sets(series, validation_split, test_split, input_len
 
     return x_train, y_train, x_dev, y_dev, x_test, y_test
 
-def create_checkpoint(OS, NN_arch, model, optimizer):
+def create_checkpoint(OS, NN_arch, model, optimizer, linux_path = 0):
     # create a checkpoint instance
     if (OS == "linux"):
-        checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
-        # checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
+        if (linux_path == 1):
+            checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+        else:
+            checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
     else:
         checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
 
