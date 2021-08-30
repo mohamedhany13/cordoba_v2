@@ -29,7 +29,7 @@ output_features = 1
 validation_split = 0.2
 test_split = 0.1
 batch_size = 64
-EPOCHS = 2000
+EPOCHS = 500
 
 num_layers = 8
 num_heads = 8

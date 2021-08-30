@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
+import os
 from numpy import array
 import tensorflow as tf
-import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
+import lstm_att_layers
+import seaborn as sns
 
 def load_dataset(region, area_code, normalize = False, swap = True, OS = "linux"):
     if (OS == "linux"):
@@ -165,6 +167,154 @@ def split_sequence_autoenc(input_sequence, n_steps_in, area_code):
         target_x.append(seq_x_target)
     return array(x), array(target_x), array(y)
 
+def split_dataframe_train_dev_test(input_series, validation_split, test_split):
+
+    series_size = len(input_series)
+    validation_size = int(series_size * validation_split)
+    test_size = int(series_size * test_split)
+    train_size = int(series_size * (1 - validation_split - test_split))
+
+    train_set = input_series[0: train_size]
+    dev_set = input_series[train_size: (train_size + validation_size)]
+    test_set = input_series[(train_size + validation_size): (train_size + validation_size + test_size)]
+
+    return train_set, dev_set, test_set
+
+def generate_train_dev_test_sets(series, validation_split, test_split, input_length, output_length, area_code):
+
+    # split data into training set, development set, test set
+    train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
+
+    # create the training set
+    x_train, x_target_train, y_train = split_sequence(train_set, input_length, output_length, area_code)
+    y_train = y_train[..., np.newaxis]
+
+    # shuffle the training set
+    shuffler = np.random.permutation(x_train.shape[0])
+    x_train = x_train[shuffler]
+    x_target_train = x_target_train[shuffler]
+    y_train = y_train[shuffler]
+    # create the dev set
+    x_dev, x_target_dev, y_dev = split_sequence(dev_set, input_length, output_length, area_code)
+    y_dev = y_dev[..., np.newaxis]
+    # create the test set
+    x_test, x_target_test, y_test = split_sequence(test_set, input_length, output_length, area_code)
+    y_test = y_test[..., np.newaxis]
+
+    return x_train, y_train, x_dev, y_dev, x_test, y_test
+
+def create_checkpoint(OS, NN_arch, model, optimizer):
+    # create a checkpoint instance
+    if (OS == "linux"):
+        checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
+        # checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
+    else:
+        checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
+
+    # checkpoint directory
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".ckpt")
+    # checkpoint object
+    checkpoint = tf.train.Checkpoint(model= model, optimizer= optimizer)
+    # checkpoint manager
+    ckpt_manager = tf.train.CheckpointManager(checkpoint, checkpoint_prefix, max_to_keep=5)
+
+    return checkpoint, checkpoint_prefix, ckpt_manager
+
+def get_num_batches(num_examples, batch_size):
+    num_batches = int(num_examples / batch_size)
+    remainder = num_examples % batch_size
+    if (remainder != 0):
+        #num_batches += 1
+        pass
+    return num_batches
+
+def get_batch_data(batch_num, batch_size, x, y):
+
+    # get the current batch data
+    start_index = batch_num * batch_size
+    end_index = start_index + batch_size
+    if (end_index > x.shape[0]):
+        end_index = x.shape[0]
+    batch_input = x[start_index: end_index]
+    #batch_target_input = x_target_train[start_index: end_index]
+    batch_output = y[start_index: end_index]
+
+    return tf.convert_to_tensor(batch_input), tf.convert_to_tensor(batch_output)
+
+def conv_tensor_array(input_tensor):
+    to_list = tf.Variable(input_tensor).numpy().tolist()
+    to_array = np.array(to_list)
+    # remove dimensions of size 1
+    to_array = np.squeeze(to_array)
+    # transpose to get desired shape
+    to_array = np.transpose(to_array)
+    return to_array
+
+def compare_lists(old_list, new_list):
+
+    variables_changed = []
+    any_change = False
+    for i in range(len(old_list)):
+        diff = old_list[i]-new_list[i]
+        diff = conv_tensor_array(diff)
+        if (diff.ndim > 0):
+            sum_diff = sum(diff)
+            for j in range(diff.ndim - 1):
+                sum_diff = sum(sum_diff)
+        else:
+            sum_diff = diff
+        if (sum_diff != 0):
+            #print(f"difference equals {sum_diff}")
+            any_change = True
+            variables_changed.append(i)
+    return any_change, variables_changed
+
+def test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, model, test_accuracy, batch_size,
+                         lstm_units):
+    x_test_batch = x_test[:batch_size, ...]
+    y_test_batch = y_test[:batch_size, ...]
+    if (NN_arch == "autoregressive_attention"):
+        h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
+        predicted_output, attention_weights = lstm_att_layers.evaluate(x_test_batch, y_test_batch,
+                                                                       input_length, output_length,
+                                                                       model, test_accuracy,
+                                                                       h_dec_input)
+    else:
+        predicted_output, attention_weights = lstm_att_layers.evaluate(x_test_batch, y_test_batch,
+                                                                       input_length, output_length,
+                                                                       model, test_accuracy)
+
+    predicted_output_reshaped = tf.squeeze(tf.convert_to_tensor(predicted_output))
+    real_output_reshaped = tf.squeeze(y_test_batch)
+    num_dim = np.ndim(real_output_reshaped)
+    if (num_dim == 1):
+        predicted_output_reshaped = tf.expand_dims(predicted_output_reshaped, axis = -1)
+        real_output_reshaped = tf.expand_dims(real_output_reshaped, axis=-1)
+
+    predicted_output_reshaped = tf.transpose(predicted_output_reshaped)
+    real_seq = tf.concat([x_test_batch[..., -1], real_output_reshaped], axis = -1)
+    pred_seq = tf.concat([x_test_batch[..., -1], predicted_output_reshaped], axis = -1)
+    plt.figure()
+    x_plot = np.arange(x_test_batch.shape[1] + y_test_batch.shape[1])
+    y_real_plot = real_seq[0, ...]
+    y_pred_plot = pred_seq[0, ...]
+    plt.plot(x_plot, y_real_plot, 'r', label = "real")
+    plt.plot(x_plot, y_pred_plot, 'b', label = "predicted")
+    plt.xlabel('time')
+    plt.ylabel('evapotranspiration')
+    plt.legend()
+
+    plt.show(block = False)
+
+    att_weights_reshaped = tf.squeeze(tf.convert_to_tensor(attention_weights))
+    if (num_dim > 1):
+        att_weights_reshaped = tf.transpose(att_weights_reshaped, perm = [1, 0, 2])
+    plt.figure()
+    #plt.imshow(att_weights_reshaped[0, ...], cmap='hot', interpolation='nearest')
+    sns.heatmap(att_weights_reshaped[0, ...], linewidth=0.5)
+    plt.show(block = False)
+
+
 # Evaluate function -- similar to the training loop
 # target is input with shape assuming batch (3-dimensional)
 def evaluate(input, target, encoder, decoder):
@@ -299,28 +449,6 @@ def get_resnet_units(input_features, input_window, kernel_size, num_kernels, poo
     resnet_ffinput_units = conv_pool_out_rows * conv_pool_out_cols * num_kernels
     return resnet_ffinput_units
 
-def conv_tensor_array(input_tensor):
-    to_list = tf.Variable(input_tensor).numpy().tolist()
-    to_array = np.array(to_list)
-    # remove dimensions of size 1
-    to_array = np.squeeze(to_array)
-    # transpose to get desired shape
-    to_array = np.transpose(to_array)
-    return to_array
-
-def split_dataframe_train_dev_test(input_series, validation_split, test_split):
-
-    series_size = len(input_series)
-    validation_size = int(series_size * validation_split)
-    test_size = int(series_size * test_split)
-    train_size = int(series_size * (1 - validation_split - test_split))
-
-    train_set = input_series[0: train_size]
-    dev_set = input_series[train_size: (train_size + validation_size)]
-    test_set = input_series[(train_size + validation_size): (train_size + validation_size + test_size)]
-
-    return train_set, dev_set, test_set
-
 def get_input_length(input_window, input_years):
     if input_window == 1:
         # assume 1 year has 360 days
@@ -354,18 +482,6 @@ def plot_pred_vs_target(target, pred):
     # To load the display window
     plt.show()
 
-def get_batch_data(batch_num, batch_size, x, y):
-
-    # get the current batch data
-    start_index = batch_num * batch_size
-    end_index = start_index + batch_size
-    if (end_index > x.shape[0]):
-        end_index = x.shape[0]
-    batch_input = x[start_index: end_index]
-    #batch_target_input = x_target_train[start_index: end_index]
-    batch_output = y[start_index: end_index]
-
-    return batch_input, batch_output
 
 
 

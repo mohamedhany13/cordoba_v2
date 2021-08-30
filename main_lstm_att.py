@@ -1,96 +1,69 @@
 import numpy as np
 
 import general_methods
-import transformer_layers
+import lstm_att_layers
 import tensorflow as tf
-from general_methods import load_dataset, get_resnet_units, split_sequence_autoenc, \
-    avg_batch_MAE, conv_tensor_array, split_dataframe_train_dev_test, split_sequence, \
-    get_input_length, plot_pred_vs_target
 import os
 import time
 import logging
+import graphviz
+import pydot
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
-NN_arch = "transformer"
+NN_arch = "autoregressive_attention"
 # choose OS type (linux or windows)
-OS = "linux"
+OS = "windows"
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
-sim_mode = "train_cont"
+sim_mode = "train"
 
-normalize_dataset = True
-input_length = 365
-output_length = 30
+normalize_dataset = False
+input_length = 30
+output_length = 10
 input_features = 8
 output_features = 1
 validation_split = 0.2
 test_split = 0.1
-batch_size = 64
-EPOCHS = 2000
+batch_size = 4
+EPOCHS = 300
 
-num_layers = 8
-num_heads = 8
-d_model = 128
-# dff is number of units output from non-linear dense layer in the feed-forward block
-dff = 128
+lstm_units = 8
+attention_units = 10
 dropout_rate = 0.1
 
 region = "Cordoba"
 area_code = "06"
-series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
-# randomize the training set to better train the model instead of having nearly similar training examples in each batch
-#series_shuffled = series.sample(frac = 1)
-# split data into training set, development set, test set
-train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
+series = general_methods.load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
 
-# create the training set
-x_train, x_target_train, y_train = split_sequence(train_set, input_length, output_length, area_code)
-y_train = y_train[..., np.newaxis]
-
-# shuffle the training set
-shuffler = np.random.permutation(x_train.shape[0])
-x_train = x_train[shuffler]
-x_target_train = x_target_train[shuffler]
-y_train = y_train[shuffler]
-# create the dev set
-x_dev, x_target_dev, y_dev = split_sequence(dev_set, input_length, output_length, area_code)
-y_dev = y_dev[..., np.newaxis]
-# create the test set
-x_test, x_target_test, y_test = split_sequence(test_set, input_length, output_length, area_code)
-y_test = y_test[..., np.newaxis]
-
+x_train, y_train, x_dev, y_dev,\
+x_test, y_test = general_methods.generate_train_dev_test_sets(series, validation_split, test_split,
+                                                              input_length, output_length, area_code)
 # Initialize optimizer and loss functions
-learning_rate = transformer_layers.CustomSchedule(d_model)
-optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
-                                     epsilon=1e-9)
-#optimizer = tf.keras.optimizers.Adam( learning_rate= 0.02)
+#optimizer = tf.keras.optimizers.Adam(beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+optimizer = tf.keras.optimizers.Adam()
 train_loss = tf.keras.metrics.Mean(name= "train_loss")
 train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
+dev_accuracy = tf.keras.metrics.Mean(name='dev_accuracy')
+test_accuracy = tf.keras.metrics.Mean(name='test_accuracy')
 loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
 
-transformer = transformer_layers.Transformer(
-    num_layers=num_layers,
-    d_model=d_model,
-    num_heads=num_heads,
-    dff=dff,
-    input_features=input_features,
-    output_features=output_features,
-    input_length=input_length,
-    output_length=output_length,
-    rate=dropout_rate)
+h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
+autoreg_att_model = lstm_att_layers.autoreg_att_model(output_features, lstm_units, attention_units, dropout_rate)
+enc_dec_model = lstm_att_layers.enc_dec_model(output_features, lstm_units, attention_units, dropout_rate)
+attention_model = lstm_att_layers.attention_model(output_features, lstm_units, attention_units, dropout_rate)
+#dot_img_file = "C:\\Users\\moham\\Desktop\\model.png"
+#tf.keras.utils.plot_model(enc_dec_model, to_file=dot_img_file, show_shapes=True)
 
-# create a checkpoint instance
-if (OS == "linux"):
-    checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
-    #checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
-else:
-    checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".ckpt")
-checkpoint = tf.train.Checkpoint(transformer = transformer, optimizer = optimizer)
-ckpt_manager = tf.train.CheckpointManager(checkpoint, checkpoint_prefix, max_to_keep=5)
+#autoreg_att_model.run_eagerly = True
+
+checkpoint, checkpoint_prefix, ckpt_manager = general_methods.create_checkpoint(OS, NN_arch,
+                                                                                autoreg_att_model, optimizer)
+# testing of model before training:
+general_methods.test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, autoreg_att_model,
+                                     test_accuracy, batch_size, lstm_units)
 
 with tf.device('/gpu:0'):
  if (sim_mode == "train" or sim_mode == "train_cont"):
@@ -101,29 +74,39 @@ with tf.device('/gpu:0'):
         print("latest checkpoint loaded")
 
     # get number of batches for train set
-    num_batches_train = int(x_train.shape[0] / batch_size)
-    remainder_train = x_train.shape[0] % batch_size
-    if (remainder_train != 0):
-        num_batches_train += 1
-
+    num_batches_train = general_methods.get_num_batches(x_train.shape[0], batch_size)
     # get number of batches of dev set
-    num_batches_dev = int(x_dev.shape[0] / batch_size)
-    remainder_dev = x_dev.shape[0] % batch_size
-    if (remainder_dev != 0):
-        num_batches_dev += 1
+    num_batches_dev = general_methods.get_num_batches(x_dev.shape[0], batch_size)
 
     train_start_time = time.time()
+    # convert all inputs to train_step to tensors for faster processing
+    #input_length_tensor = tf.convert_to_tensor(input_length)
+    #output_length_tensor = tf.convert_to_tensor(output_length)
     # Training loop
     for epoch in range(EPOCHS):
-        start = time.time()
+        train_start = time.time()
 
         train_loss.reset_states()
         train_accuracy.reset_states()
 
         for batch in range(num_batches_train):
             batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_train, y_train)
-            model_variables = transformer_layers.train_step(batch_input, batch_output, transformer,
-                                          optimizer, train_loss, train_accuracy, loss_object)
+
+            if (NN_arch == "autoregressive_attention"):
+                predicted_output, att_weights, \
+                model_variables = lstm_att_layers.train_step(batch_input, batch_output, input_length, output_length,
+                                                             autoreg_att_model, optimizer, train_loss, train_accuracy,
+                                                             loss_object, h_dec_input)
+            else:
+                predicted_output, att_weights, \
+                model_variables = lstm_att_layers.train_step(batch_input, batch_output, input_length, output_length,
+                                                             autoreg_att_model, optimizer, train_loss, train_accuracy,
+                                                             loss_object)
+            # check if model is training
+            if (batch == 0):
+                old_model_variables = model_variables
+            else:
+                any_change, variables_changed = general_methods.compare_lists(old_model_variables, model_variables)
 
             if batch % 50 == 0:
                 print(
@@ -133,17 +116,43 @@ with tf.device('/gpu:0'):
             ckpt_save_path = ckpt_manager.save()
             print(f'Saving checkpoint for epoch {epoch + 1} at {ckpt_save_path}')
 
-        print(f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
+        train_time = time.time() - train_start
 
-        print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs, in minutes: {(time.time() - start)/60:.2f} mins\n')
+        # evaluation
+        dev_start = time.time()
+        dev_accuracy.reset_states()
+        for batch in range(num_batches_dev):
+            batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_dev, y_dev)
+            if (NN_arch == "autoregressive_attention"):
+                predicted_output, attention_weights = lstm_att_layers.evaluate(batch_input, batch_output,
+                                                                               input_length, output_length,
+                                                                               autoreg_att_model, dev_accuracy,
+                                                                               h_dec_input)
+            else:
+                predicted_output, attention_weights = lstm_att_layers.evaluate(batch_input, batch_output,
+                                                                               input_length, output_length,
+                                                                               autoreg_att_model, dev_accuracy)
+
+        dev_time = time.time() - dev_start
+        print(f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}, \n'
+              f'dev accuracy {dev_accuracy.result():.4f}')
+
+        print(f"for 1 epoch: train time: {train_time:.2f} secs, dev time: {dev_time:.2f} secs")
+        epoch_time = train_time + dev_time
+        print(f'Time taken for 1 epoch: {epoch_time:.2f} secs, in minutes: {epoch_time/60:.2f} mins\n')
 
     total_train_time = time.time() - train_start_time
     # save total train time
     print("total training time = {} sec, in minutes: {} mins, in hours: {} hours".format(total_train_time, total_train_time/60, total_train_time/3600))
 
+    # testing of model after training:
+    general_methods.test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, autoreg_att_model,
+                                         test_accuracy, batch_size, lstm_units)
+
  else:
+    # testing
     # Restore the latest checkpoint in checkpoint_dir
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_prefix))
 
 
 x = 0
