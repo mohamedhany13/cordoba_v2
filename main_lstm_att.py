@@ -13,27 +13,27 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
 NN_arch = "autoregressive_attention"
 # choose OS type (linux or windows)
-OS = "windows"
+OS = "linux"
 # choose 1 to use path in drive, 0 to use path in downloads (for linux only)
 linux_path = 0
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
-sim_mode = "train"
+sim_mode = "train_cont"
 
-normalize_dataset = False
-input_length = 30
-output_length = 10
+normalize_dataset = True
+input_length = 365
+output_length = 30
 input_features = 8
 output_features = 1
 validation_split = 0.2
 test_split = 0.1
-batch_size = 4
-EPOCHS = 300
+batch_size = 64
+EPOCHS = 1000
 
-lstm_units = 8
-attention_units = 10
+lstm_units = 256
+attention_units = 128
 dropout_rate = 0.1
 
 region = "Cordoba"

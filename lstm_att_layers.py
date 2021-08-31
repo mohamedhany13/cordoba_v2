@@ -28,7 +28,8 @@ class pointwise_attention(tf.keras.layers.Layer):
     h_dec_prev_w_time_axis = tf.expand_dims(h_dec_prev, axis=1)
 
     # h_decoder_prev with time axis shape == (batch_size, input sequence length, hidden size of decoder)
-    h_decoder_prev_w_time_axis = tf.repeat(h_dec_prev_w_time_axis, input_sequence_length, axis=1)
+    #h_decoder_prev_w_time_axis = tf.repeat(h_dec_prev_w_time_axis, input_sequence_length, axis=1)
+    h_decoder_prev_w_time_axis = tf.tile(h_dec_prev_w_time_axis, [1, input_sequence_length, 1])
 
     #concatenate h_decoder_prev with h_encoder
     h_encoder_decoder = tf.concat([h_enc, h_decoder_prev_w_time_axis], axis = -1)
@@ -42,7 +43,8 @@ class pointwise_attention(tf.keras.layers.Layer):
     # get context vector (shape = batch_size, hidden size of encoder)
     # repeat attention weights so that its shape = batch_size, input sequence length, hidden size of encoder
     # (for dot product calculation)
-    attention_weights_repeated = tf.repeat(attention_weights, h_enc.shape[-1], axis = -1)
+    #attention_weights_repeated = tf.repeat(attention_weights, h_enc.shape[-1], axis = -1)
+    attention_weights_repeated = tf.tile(attention_weights, [1, 1, h_enc.shape[-1]])
     # shape = batch_size, input sequence length, hidden size of encoder
     elementwise_mult = tf.math.multiply(attention_weights_repeated, h_enc)
 
@@ -70,7 +72,8 @@ class autoregressive_attention(tf.keras.layers.Layer):
     h_dec_prev_w_time_axis = tf.expand_dims(h_dec_prev, axis=1)
 
     # h_decoder_prev with time axis shape == (batch_size, input sequence length, hidden size of decoder)
-    h_dec_prev_w_t_repeated = tf.repeat(h_dec_prev_w_time_axis, Tx + Ty, axis=1)
+    #h_dec_prev_w_t_repeated = tf.repeat(h_dec_prev_w_time_axis, Tx + Ty, axis=1)
+    h_dec_prev_w_t_repeated = tf.tile(h_dec_prev_w_time_axis, [1, Tx + Ty, 1])
 
     #concatenate h_dec with h_enc
     h_enc_dec = tf.concat([h_enc, h_dec], axis = 1)
@@ -99,8 +102,8 @@ class autoregressive_attention(tf.keras.layers.Layer):
     # get context vector (shape = batch_size, hidden size of encoder)
     # repeat attention weights so that its shape = batch_size, input + output sequence length, hidden size of encoder
     # (for dot product calculation)
-    attention_weights_repeated = tf.repeat(attention_weights, tf.shape(h_enc_dec)[-1],
-                                           axis = -1)
+    #attention_weights_repeated = tf.repeat(attention_weights, tf.shape(h_enc_dec)[-1], axis = -1)
+    attention_weights_repeated = tf.tile(attention_weights, [1, 1, tf.shape(h_enc_dec)[-1]])
     # shape = batch_size, input sequence length, hidden size of encoder
     elementwise_mult = tf.math.multiply(attention_weights_repeated, h_enc_dec)
 
