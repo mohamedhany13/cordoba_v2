@@ -20,7 +20,7 @@ linux_path = 0
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
-sim_mode = "train"
+sim_mode = "train_cont"
 
 # choose zero if you want to set it to default
 learning_rate = 0.001
