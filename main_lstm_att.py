@@ -20,16 +20,19 @@ linux_path = 0
 # train ==> "train"
 # test ==> "test"
 # continue training with previous weights ==> "train_cont"
-sim_mode = "train_cont"
+sim_mode = "train"
+
+# choose zero if you want to set it to default
+learning_rate = 0.001
 
 normalize_dataset = True
-input_length = 365
-output_length = 30
+input_length = 30
+output_length = 1
 input_features = 8
 output_features = 1
 validation_split = 0.2
 test_split = 0.1
-batch_size = 64
+batch_size = 128
 EPOCHS = 1000
 
 lstm_units = 256
@@ -45,15 +48,18 @@ x_train, y_train, x_dev, y_dev,\
 x_test, y_test = general_methods.generate_train_dev_test_sets(series, validation_split, test_split,
                                                               input_length, output_length, area_code)
 # Initialize optimizer and loss functions
-#optimizer = tf.keras.optimizers.Adam(beta_1=0.9, beta_2=0.98, epsilon=1e-9)
-optimizer = tf.keras.optimizers.Adam()
+if (learning_rate == 0):
+    optimizer = tf.keras.optimizers.Adam(beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+else:
+    optimizer = tf.keras.optimizers.Adam(learning_rate= learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+#optimizer = tf.keras.optimizers.Adam()
 train_loss = tf.keras.metrics.Mean(name= "train_loss")
 train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
 dev_accuracy = tf.keras.metrics.Mean(name='dev_accuracy')
 test_accuracy = tf.keras.metrics.Mean(name='test_accuracy')
 loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
 
-h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
+#h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
 autoreg_att_model = lstm_att_layers.autoreg_att_model(output_features, lstm_units, attention_units, dropout_rate)
 enc_dec_model = lstm_att_layers.enc_dec_model(output_features, lstm_units, attention_units, dropout_rate)
 attention_model = lstm_att_layers.attention_model(output_features, lstm_units, attention_units, dropout_rate)
@@ -95,6 +101,7 @@ with tf.device('/gpu:0'):
             batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_train, y_train)
 
             if (NN_arch == "autoregressive_attention"):
+                h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
                 predicted_output, att_weights, \
                 model_variables = lstm_att_layers.train_step(batch_input, batch_output, input_length, output_length,
                                                              autoreg_att_model, optimizer, train_loss, train_accuracy,
@@ -109,10 +116,11 @@ with tf.device('/gpu:0'):
                 old_model_variables = model_variables
             else:
                 any_change, variables_changed = general_methods.compare_lists(old_model_variables, model_variables)
-
+            """
             if batch % 50 == 0:
                 print(
                     f'Epoch {epoch + 1} Batch {batch} Loss {train_loss.result():.4f} MAPE {train_accuracy.result():.4f}')
+            """
 
         if (epoch + 1) % 5 == 0:
             ckpt_save_path = ckpt_manager.save()
@@ -126,6 +134,7 @@ with tf.device('/gpu:0'):
         for batch in range(num_batches_dev):
             batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_dev, y_dev)
             if (NN_arch == "autoregressive_attention"):
+                h_dec_input = tf.Variable(tf.zeros((batch_size, output_length, lstm_units), dtype=tf.float32))
                 predicted_output, attention_weights = lstm_att_layers.evaluate(batch_input, batch_output,
                                                                                input_length, output_length,
                                                                                autoreg_att_model, dev_accuracy,

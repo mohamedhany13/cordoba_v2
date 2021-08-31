@@ -294,8 +294,8 @@ def test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, m
     if (num_dim == 1):
         predicted_output_reshaped = tf.expand_dims(predicted_output_reshaped, axis = -1)
         real_output_reshaped = tf.expand_dims(real_output_reshaped, axis=-1)
-
-    predicted_output_reshaped = tf.transpose(predicted_output_reshaped)
+    else:
+        predicted_output_reshaped = tf.transpose(predicted_output_reshaped)
     real_seq = tf.concat([x_test_batch[..., -1], real_output_reshaped], axis = -1)
     pred_seq = tf.concat([x_test_batch[..., -1], predicted_output_reshaped], axis = -1)
     plt.figure()
@@ -313,6 +313,8 @@ def test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, m
     att_weights_reshaped = tf.squeeze(tf.convert_to_tensor(attention_weights))
     if (num_dim > 1):
         att_weights_reshaped = tf.transpose(att_weights_reshaped, perm = [1, 0, 2])
+    else:
+        att_weights_reshaped = tf.expand_dims(att_weights_reshaped, axis = 1)
     plt.figure()
     #plt.imshow(att_weights_reshaped[0, ...], cmap='hot', interpolation='nearest')
     sns.heatmap(att_weights_reshaped[0, ...], linewidth=0.5)
