@@ -14,7 +14,7 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
 NN_arch = "lstm"
 # choose OS type (linux or windows)
-OS = "linux"
+OS = "windows"
 # choose 1 to use path in drive, 0 to use path in downloads (for linux only)
 linux_path = 0
 # choose whether to train the model or test it
