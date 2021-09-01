@@ -28,7 +28,7 @@ learning_rate = 0.001
 block_shuffle_size = 10
 
 normalize_dataset = False
-input_length = 365
+input_length = 60
 output_length = 1
 input_features = 8
 output_features = 1
@@ -53,16 +53,21 @@ random_series = normal_series.sample(frac=1, random_state=1).reset_index(drop=Tr
 random_series_block_shuffled = general_methods.block_shuffle_series(random_series, block_shuffle_size)
 random_series_block_shuffled = np.squeeze(random_series_block_shuffled)
 
-n_x_train, n_y_train, n_x_dev, n_y_dev, _, _ = general_methods.generate_datasets_univariate(normal_series.to_list(), validation_split,
+normal_series_list = normal_series.to_list()
+normal_bs_series_list = normal_series_block_shuffled.to_list()
+random_series_list = random_series.to_list()
+random_bs_series_list = random_series_block_shuffled.to_list()
+
+n_x_train, n_y_train, n_x_dev, n_y_dev, _, _ = general_methods.generate_datasets_univariate(normal_series_list, validation_split,
                                                                                             test_split, input_length,
                                                                                             output_length)
-n_b_x_train, n_b_y_train, n_b_x_dev, n_b_y_dev, _, _ = general_methods.generate_datasets_univariate(normal_series_block_shuffled, validation_split,
+n_b_x_train, n_b_y_train, n_b_x_dev, n_b_y_dev, _, _ = general_methods.generate_datasets_univariate(normal_bs_series_list, validation_split,
                                                                                             test_split, input_length,
                                                                                             output_length)
-r_x_train, r_y_train, r_x_dev, r_y_dev, _, _ = general_methods.generate_datasets_univariate(random_series.to_list(), validation_split,
+r_x_train, r_y_train, r_x_dev, r_y_dev, _, _ = general_methods.generate_datasets_univariate(random_series_list, validation_split,
                                                                                             test_split, input_length,
                                                                                             output_length)
-r_b_x_train, r_b_y_train, r_b_x_dev, r_b_y_dev, _, _ = general_methods.generate_datasets_univariate(random_series_block_shuffled, validation_split,
+r_b_x_train, r_b_y_train, r_b_x_dev, r_b_y_dev, _, _ = general_methods.generate_datasets_univariate(random_bs_series_list, validation_split,
                                                                                             test_split, input_length,
                                                                                             output_length)
 model = lstm_att_layers.lstm_model(lstm_units, output_features)
