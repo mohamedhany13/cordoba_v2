@@ -1,6 +1,8 @@
 import tensorflow as tf
 import logging
 import numpy as np
+import general_methods
+import time
 
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
@@ -280,6 +282,24 @@ class attention_model(tf.keras.Model):
 
         return y_final_current, attention_weights
 
+class lstm_model(tf.keras.Model):
+    def __init__(self, enc_hidden_units, output_features):
+        super().__init__()
+
+        self.enc_dec_hidden_units = enc_hidden_units
+        self.output_features = output_features
+
+        self.enc_lstm = tf.keras.layers.LSTM(enc_hidden_units, return_state= False, return_sequences= False)
+        self.final_layer = tf.keras.layers.Dense(output_features, activation= "relu")
+
+    def call(self, input_seq):
+        # encoder:
+        lstm_out = self.enc_lstm(input_seq)
+        y_pred = self.final_layer(lstm_out)
+
+        return y_pred
+
+
 # The @tf.function trace-compiles train_step into a TF graph for faster
 # execution. The function specializes to the precise shape of the argument
 # tensors. To avoid re-tracing due to the variable sequence lengths or variable
@@ -292,6 +312,32 @@ train_step_signature = [
 ]
 @tf.function(input_signature=train_step_signature)
 """
+
+@tf.function
+def train_step_lstm(input_seq, target, Tx, Ty, model, optimizer, train_loss, train_accuracy, loss_object):
+
+    with tf.GradientTape() as tape:
+
+        predictions = model(input_seq)
+        loss = loss_function(target, predictions, loss_object)
+
+    gradients = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+    AE, APE, SE = accuracy_function(target, predictions)
+
+    train_loss(loss)
+    train_accuracy(APE)
+
+    return predictions, model.trainable_variables
+
+@tf.function
+def evaluate_lstm(input_seq, target, Tx, Ty, model, dev_accuracy):
+    predictions = model(input_seq)
+    AE, APE, SE = accuracy_function(target, predictions)
+    dev_accuracy(APE)
+
+    return predictions
 
 @tf.function
 def train_step(input_seq, target, Tx, Ty, autoreg_att_model, optimizer, train_loss, train_accuracy, loss_object,
@@ -327,3 +373,72 @@ def evaluate(input_seq, target, Tx, Ty, autoreg_att_model, dev_accuracy, h_dec_i
     dev_accuracy(APE)
 
     return predictions, attention_weights
+
+def training_function_lstm(sim_mode, checkpoint, checkpoint_prefix, ckpt_manager, batch_size, EPOCHS, train_loss,
+                           optimizer, loss_object, train_accuracy, dev_accuracy, model,
+                           input_length, output_length, x_train, y_train, x_dev, y_dev):
+    if (sim_mode == "train" or sim_mode == "train_cont"):
+
+        if (sim_mode == "train_cont"):
+            # Restore the latest checkpoint in checkpoint_dir
+            checkpoint.restore(tf.train.latest_checkpoint(checkpoint_prefix))
+            print("latest checkpoint loaded")
+
+        # get number of batches for train set
+        num_batches_train = general_methods.get_num_batches(x_train.shape[0], batch_size)
+        # get number of batches of dev set
+        num_batches_dev = general_methods.get_num_batches(x_dev.shape[0], batch_size)
+
+        train_start_time = time.time()
+        # convert all inputs to train_step to tensors for faster processing
+        # Training loop
+        for epoch in range(EPOCHS):
+            train_start = time.time()
+
+            train_loss.reset_states()
+            train_accuracy.reset_states()
+
+            for batch in range(num_batches_train):
+                batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_train, y_train)
+
+                predicted_output, model_variables = train_step_lstm(batch_input, batch_output,
+                                                                                    input_length,
+                                                                                    output_length,
+                                                                                    model, optimizer, train_loss,
+                                                                                    train_accuracy,
+                                                                                    loss_object)
+                # check if model is training
+                if (batch == 0):
+                    old_model_variables = model_variables
+                else:
+                    any_change, variables_changed = general_methods.compare_lists(old_model_variables, model_variables)
+
+            if (epoch + 1) % 5 == 0:
+                ckpt_save_path = ckpt_manager.save()
+                print(f'Saving checkpoint for epoch {epoch + 1} at {ckpt_save_path}')
+
+            train_time = time.time() - train_start
+
+            # evaluation
+            dev_start = time.time()
+            dev_accuracy.reset_states()
+            for batch in range(num_batches_dev):
+                batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_dev, y_dev)
+                predicted_output = evaluate_lstm(batch_input, batch_output,
+                                                                 input_length, output_length,
+                                                                 model, dev_accuracy)
+
+            dev_time = time.time() - dev_start
+            print(f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}, \n'
+                  f'dev accuracy {dev_accuracy.result():.4f}')
+
+            print(f"for 1 epoch: train time: {train_time:.2f} secs, dev time: {dev_time:.2f} secs")
+            epoch_time = train_time + dev_time
+            print(f'Time taken for 1 epoch: {epoch_time:.2f} secs, in minutes: {epoch_time / 60:.2f} mins\n')
+
+        total_train_time = time.time() - train_start_time
+        # save total train time
+        print("total training time = {} sec, in minutes: {} mins, in hours: {} hours".format(total_train_time,
+                                                                                             total_train_time / 60,
+                                                                                             total_train_time / 3600))
+

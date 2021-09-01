@@ -123,6 +123,27 @@ def swap_dataframe_cols(series, col1_index, col2_index):
     series.columns = col_list
     return series
 
+# split a univariate sequence into samples
+def split_sequence_univariate(input_sequence, n_steps_in, n_steps_out):
+
+    x, y = list(), list()
+    x_list_arr = list()
+    for i in range (len(input_sequence)):
+        # find the end of this pattern
+        x_end = i + n_steps_in
+        y_end = x_end + n_steps_out
+        # check if we are beyond the sequence
+        if y_end > len(input_sequence):
+            break
+        # gather input and output parts of the pattern
+        seq_x = input_sequence[i : x_end]
+        seq_y = input_sequence[x_end : y_end]
+        x.append(seq_x)
+        y.append(seq_y)
+    x_arr = array(x)
+    y_arr = array(y)
+    return x_arr, y_arr
+
 # split a multivariate sequence into samples
 def split_sequence(input_sequence, n_steps_in, n_steps_out, area_code):
     eva_trans = "Co" + area_code + "ETo"
@@ -205,6 +226,32 @@ def generate_train_dev_test_sets(series, validation_split, test_split, input_len
 
     return x_train, y_train, x_dev, y_dev, x_test, y_test
 
+def generate_datasets_univariate(series, validation_split, test_split, input_length, output_length):
+
+    # split data into training set, development set, test set
+    train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
+
+    # create the training set
+    x_train, y_train = split_sequence_univariate(train_set, input_length, output_length)
+    x_train = x_train[..., np.newaxis]
+    y_train = y_train[..., np.newaxis]
+    # shuffle the training set
+    shuffler = np.random.permutation(x_train.shape[0])
+    x_train = x_train[shuffler]
+    y_train = y_train[shuffler]
+
+    # create the dev set
+    x_dev, y_dev = split_sequence_univariate(dev_set, input_length, output_length)
+    x_dev = x_dev[..., np.newaxis]
+    y_dev = y_dev[..., np.newaxis]
+
+    # create the test set
+    x_test, y_test = split_sequence_univariate(test_set, input_length, output_length)
+    x_test = x_test[..., np.newaxis]
+    y_test = y_test[..., np.newaxis]
+
+    return x_train, y_train, x_dev, y_dev, x_test, y_test
+
 def create_checkpoint(OS, NN_arch, model, optimizer, linux_path = 0):
     # create a checkpoint instance
     if (OS == "linux"):
@@ -243,7 +290,13 @@ def get_batch_data(batch_num, batch_size, x, y):
     #batch_target_input = x_target_train[start_index: end_index]
     batch_output = y[start_index: end_index]
 
-    return tf.convert_to_tensor(batch_input), tf.convert_to_tensor(batch_output)
+    batch_input = tf.convert_to_tensor(batch_input)
+    batch_output = tf.convert_to_tensor(batch_output)
+
+    batch_input = tf.cast(batch_input, tf.float32)
+    batch_output = tf.cast(batch_output, tf.float32)
+
+    return batch_input, batch_output
 
 def conv_tensor_array(input_tensor):
     to_list = tf.Variable(input_tensor).numpy().tolist()
@@ -320,6 +373,37 @@ def test_model_w_heatmap(NN_arch, x_test, y_test, input_length, output_length, m
     #plt.imshow(att_weights_reshaped[0, ...], cmap='hot', interpolation='nearest')
     sns.heatmap(att_weights_reshaped[0, ...], linewidth=0.5)
     plt.show(block = False)
+
+def block_shuffle_series(series, block_size):
+    series_list = series.tolist()
+    series_size = len(series_list)
+    assert series_size % block_size == 0
+    num_blocks = int(series_size / block_size)
+    series_block_split = np.array_split(series_list, num_blocks)
+    np.random.seed(1)
+    np.random.shuffle(series_block_split)
+    new_series_list = np.concatenate(series_block_split, axis=0)
+    new_series = pd.DataFrame(new_series_list)
+    return new_series
+
+def calc_SSE(real, pred):
+
+    real_sq = np.squeeze(real)
+    pred_sq = np.squeeze(pred)
+    diff = real_sq - pred_sq
+    SSE = np.mean(np.square(diff))
+    return SSE
+    """
+    if (np.ndim(real) > 1):
+        avg_SSE = np.mean(SSE)
+        return avg_SSE
+    else:
+        return SSE
+    """
+
+
+
+
 
 
 # Evaluate function -- similar to the training loop
