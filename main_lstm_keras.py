@@ -49,9 +49,14 @@ series = general_methods.load_dataset(region, area_code, normalize= normalize_da
 
 normal_series = series["Co" + area_code + "ETo"]
 normal_series_list = normal_series.to_list()
-series_array = np.array(normal_series_list)
-series_array = series_array[..., np.newaxis]
+#series_array = np.array(normal_series_list)
+#series_array = series_array[..., np.newaxis]
 
+n_x_train, n_y_train, _, _, _, _ = general_methods.generate_datasets_univariate(normal_series_list, 0,
+                                                                                            0, input_length,
+                                                                                            output_length)
+n_y_train = n_y_train[..., -1]
+"""
 input_data = series_array[:-input_length]
 targets = series_array[input_length:]
 dataset = tf.keras.preprocessing.timeseries_dataset_from_array(
@@ -62,16 +67,19 @@ for batch in dataset.take(1):
 
 print("Input shape:", inputs.numpy().shape)
 print("Target shape:", targets.numpy().shape)
+"""
 
-inputs = keras.layers.Input(shape=(inputs.shape[1], inputs.shape[2]))
+inputs = keras.layers.Input(shape=(n_x_train.shape[1], n_x_train.shape[2]))
 lstm_out = keras.layers.LSTM(lstm_units)(inputs)
-outputs = keras.layers.Dense(output_features, activation= "relu")(lstm_out)
+outputs = keras.layers.Dense(output_features)(lstm_out)
 
 model = keras.Model(inputs=inputs, outputs=outputs)
 model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate), loss="mse",
               metrics=["mean_absolute_percentage_error"])
 model.summary()
 
-model.fit(dataset, epochs=EPOCHS, verbose = 1)
+model.fit(n_x_train, n_y_train, batch_size = batch_size, epochs=EPOCHS, validation_split= validation_split,
+          verbose = 1)
+
 
 x = 0
