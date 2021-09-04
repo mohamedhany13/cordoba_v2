@@ -386,41 +386,22 @@ def train_step(inp, tar, transformer, optimizer, train_loss, train_accuracy, los
   train_accuracy(APE)
 
   return transformer.trainable_variables
-"""
-def evaluate(input, output):
 
-  for i in range(max_length):
-    enc_padding_mask, combined_mask, dec_padding_mask = create_masks(
-        encoder_input, output)
+@tf.function
+def evaluate(inp, tar, predicted_output, transformer, dev_accuracy):
 
-    # predictions.shape == (batch_size, seq_len, vocab_size)
-    predictions, attention_weights = transformer(encoder_input,
-                                                 output,
-                                                 False,
-                                                 enc_padding_mask,
-                                                 combined_mask,
-                                                 dec_padding_mask)
-
+  for i in range(tar.shape[1] - 1):
+    predictions, _ = transformer(inp, predicted_output, False)
     # select the last word from the seq_len dimension
-    predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
+    predictions = predictions[:, -1:, :]
+    # concatentate the latest predicted output to the whole predicted output which is used as input to the
+    # transformer decoder
+    predicted_output = tf.concat([predicted_output, predictions], axis= 1)
 
-    predicted_id = tf.argmax(predictions, axis=-1)
+  AE, APE, SE = accuracy_function(tar, predicted_output)
+  dev_accuracy(APE)
 
-    # concatentate the predicted_id to the output which is given to the decoder
-    # as its input.
-    output = tf.concat([output, predicted_id], axis=-1)
-
-    # return the result if the predicted_id is equal to the end token
-    if predicted_id == end:
-      break
-
-  # output.shape (1, tokens)
-  text = tokenizers.en.detokenize(output)[0]  # shape: ()
-
-  tokens = tokenizers.en.lookup(output)[0]
-
-  return text, tokens, attention_weights
-"""
+  return predicted_output
 
 
 

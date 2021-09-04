@@ -15,6 +15,8 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 NN_arch = "transformer"
 # choose OS type (linux or windows)
 OS = "linux"
+# choose 1 to use path in drive, 0 to use path in downloads (for linux only)
+linux_path = 0
 # choose whether to train the model or test it
 # train ==> "train"
 # test ==> "test"
@@ -40,28 +42,12 @@ dropout_rate = 0.1
 
 region = "Cordoba"
 area_code = "06"
-series = load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS)
-# randomize the training set to better train the model instead of having nearly similar training examples in each batch
-#series_shuffled = series.sample(frac = 1)
-# split data into training set, development set, test set
-train_set, dev_set, test_set = split_dataframe_train_dev_test(series, validation_split, test_split)
+series = general_methods.load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS,
+                                      linux_path = linux_path)
 
-# create the training set
-x_train, x_target_train, y_train = split_sequence(train_set, input_length, output_length, area_code)
-y_train = y_train[..., np.newaxis]
-
-# shuffle the training set
-shuffler = np.random.permutation(x_train.shape[0])
-x_train = x_train[shuffler]
-x_target_train = x_target_train[shuffler]
-y_train = y_train[shuffler]
-# create the dev set
-x_dev, x_target_dev, y_dev = split_sequence(dev_set, input_length, output_length, area_code)
-y_dev = y_dev[..., np.newaxis]
-# create the test set
-x_test, x_target_test, y_test = split_sequence(test_set, input_length, output_length, area_code)
-y_test = y_test[..., np.newaxis]
-
+x_train, y_train, x_dev, y_dev,\
+x_test, y_test = general_methods.generate_train_dev_test_sets(series, validation_split, test_split,
+                                                              input_length, output_length, area_code)
 # Initialize optimizer and loss functions
 learning_rate = transformer_layers.CustomSchedule(d_model)
 optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
@@ -69,6 +55,7 @@ optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
 #optimizer = tf.keras.optimizers.Adam( learning_rate= 0.02)
 train_loss = tf.keras.metrics.Mean(name= "train_loss")
 train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
+dev_accuracy = tf.keras.metrics.Mean(name='dev_accuracy')
 loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
 
 transformer = transformer_layers.Transformer(
@@ -82,16 +69,8 @@ transformer = transformer_layers.Transformer(
     output_length=output_length,
     rate=dropout_rate)
 
-# create a checkpoint instance
-if (OS == "linux"):
-    checkpoint_dir = r"/media/hamamgpu/Drive3/mohamed-hany/cordoba_ckpts"
-    #checkpoint_dir = r"/home/mohamed-hany/Downloads/cordoba_ckpts"
-else:
-    checkpoint_dir = r"C:\Users\moham\Desktop\masters\master_thesis\time_series_analysis\model_testing\cordoba checkpoints"
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_" + NN_arch + ".ckpt")
-checkpoint = tf.train.Checkpoint(transformer = transformer, optimizer = optimizer)
-ckpt_manager = tf.train.CheckpointManager(checkpoint, checkpoint_prefix, max_to_keep=5)
-
+checkpoint, checkpoint_prefix, ckpt_manager = general_methods.create_checkpoint(OS, NN_arch,
+                                                                                transformer, optimizer, linux_path)
 with tf.device('/gpu:0'):
  if (sim_mode == "train" or sim_mode == "train_cont"):
 
@@ -115,7 +94,7 @@ with tf.device('/gpu:0'):
     train_start_time = time.time()
     # Training loop
     for epoch in range(EPOCHS):
-        start = time.time()
+        train_start = time.time()
 
         train_loss.reset_states()
         train_accuracy.reset_states()
@@ -124,26 +103,49 @@ with tf.device('/gpu:0'):
             batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_train, y_train)
             model_variables = transformer_layers.train_step(batch_input, batch_output, transformer,
                                           optimizer, train_loss, train_accuracy, loss_object)
-
+            # check if model is training
+            if (batch == 0):
+                old_model_variables = model_variables
+            else:
+                any_change, variables_changed = general_methods.compare_lists(old_model_variables, model_variables)
+            """
             if batch % 50 == 0:
                 print(
                     f'Epoch {epoch + 1} Batch {batch} Loss {train_loss.result():.4f} MAPE {train_accuracy.result():.4f}')
+            """
 
         if (epoch + 1) % 5 == 0:
             ckpt_save_path = ckpt_manager.save()
             print(f'Saving checkpoint for epoch {epoch + 1} at {ckpt_save_path}')
 
-        print(f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
+        train_time = time.time() - train_start
 
-        print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs, in minutes: {(time.time() - start)/60:.2f} mins\n')
+        # evaluation
+        dev_start = time.time()
+        dev_accuracy.reset_states()
+        for batch in range(num_batches_dev):
+            batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_dev, y_dev)
+            dec_input = batch_output[:, -1, :]
+            evaluated_output = transformer_layers.evaluate(batch_input, batch_output, dec_input, transformer,
+                                                           dev_accuracy)
+
+        dev_time = time.time() - dev_start
+        print(f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}, \n'
+              f'dev accuracy {dev_accuracy.result():.4f}')
+
+        print(f"for 1 epoch: train time: {train_time:.2f} secs, dev time: {dev_time:.2f} secs")
+        epoch_time = train_time + dev_time
+        print(f'Time taken for 1 epoch: {epoch_time:.2f} secs, in minutes: {epoch_time / 60:.2f} mins\n')
 
     total_train_time = time.time() - train_start_time
     # save total train time
-    print("total training time = {} sec, in minutes: {} mins, in hours: {} hours".format(total_train_time, total_train_time/60, total_train_time/3600))
+    print("total training time = {} sec, in minutes: {} mins, in hours: {} hours".format(total_train_time,
+                                                                                         total_train_time / 60,
+                                                                                         total_train_time / 3600))
 
  else:
     # Restore the latest checkpoint in checkpoint_dir
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_prefix))
 
 
 x = 0

@@ -1,5 +1,4 @@
 import numpy as np
-
 import general_methods
 import lstm_att_layers
 import tensorflow as tf

@@ -28,7 +28,7 @@ sim_mode = "train"
 learning_rate = 0.001
 block_shuffle_size = 10
 
-normalize_dataset = False
+normalize_dataset = True
 input_length = 30
 output_length = 1
 input_features = 8
@@ -48,6 +48,8 @@ series = general_methods.load_dataset(region, area_code, normalize= normalize_da
                                       linux_path = linux_path)
 
 normal_series = series["Co" + area_code + "ETo"]
+
+pd.plotting.autocorrelation_plot(normal_series)
 normal_series_list = normal_series.to_list()
 #series_array = np.array(normal_series_list)
 #series_array = series_array[..., np.newaxis]
