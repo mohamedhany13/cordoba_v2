@@ -273,10 +273,11 @@ class Transformer(tf.keras.Model):
            dec_padding_mask = None, enc_padding_mask = None):
 
     enc_output = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+
     # dec_output.shape == (batch_size, tar_seq_len, d_model)
     dec_output, attention_weights = self.decoder(tar, enc_output, training, look_ahead_mask, dec_padding_mask)
 
-    final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
+    final_output = self.final_layer(dec_output) # (batch_size, tar_seq_len, target_vocab_size)
 
     return final_output, attention_weights
 
@@ -391,7 +392,8 @@ def train_step(inp, tar, transformer, optimizer, train_loss, train_accuracy, los
 def evaluate(inp, tar, predicted_output, transformer, dev_accuracy):
 
   for i in range(tar.shape[1] - 1):
-    predictions, _ = transformer(inp, predicted_output, False)
+    enc_padding_mask, combined_mask, dec_padding_mask = create_masks(inp, predicted_output)
+    predictions, _ = transformer(inp, predicted_output, False, combined_mask)
     # select the last word from the seq_len dimension
     predictions = predictions[:, -1:, :]
     # concatentate the latest predicted output to the whole predicted output which is used as input to the

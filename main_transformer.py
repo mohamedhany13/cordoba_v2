@@ -14,7 +14,7 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
 NN_arch = "transformer"
 # choose OS type (linux or windows)
-OS = "linux"
+OS = "windows"
 # choose 1 to use path in drive, 0 to use path in downloads (for linux only)
 linux_path = 0
 # choose whether to train the model or test it
@@ -24,20 +24,20 @@ linux_path = 0
 sim_mode = "train_cont"
 
 normalize_dataset = True
-input_length = 365
-output_length = 30
+input_length = 30
+output_length = 7
 input_features = 8
 output_features = 1
 validation_split = 0.2
 test_split = 0.1
-batch_size = 64
+batch_size = 16
 EPOCHS = 500
 
-num_layers = 8
-num_heads = 8
-d_model = 128
+num_layers = 2
+num_heads = 4
+d_model = 64
 # dff is number of units output from non-linear dense layer in the feed-forward block
-dff = 128
+dff = 32
 dropout_rate = 0.1
 
 region = "Cordoba"
@@ -80,16 +80,9 @@ with tf.device('/gpu:0'):
         print("latest checkpoint loaded")
 
     # get number of batches for train set
-    num_batches_train = int(x_train.shape[0] / batch_size)
-    remainder_train = x_train.shape[0] % batch_size
-    if (remainder_train != 0):
-        num_batches_train += 1
-
+    num_batches_train = general_methods.get_num_batches(x_train.shape[0], batch_size)
     # get number of batches of dev set
-    num_batches_dev = int(x_dev.shape[0] / batch_size)
-    remainder_dev = x_dev.shape[0] % batch_size
-    if (remainder_dev != 0):
-        num_batches_dev += 1
+    num_batches_dev = general_methods.get_num_batches(x_dev.shape[0], batch_size)
 
     train_start_time = time.time()
     # Training loop
@@ -125,7 +118,7 @@ with tf.device('/gpu:0'):
         dev_accuracy.reset_states()
         for batch in range(num_batches_dev):
             batch_input, batch_output = general_methods.get_batch_data(batch, batch_size, x_dev, y_dev)
-            dec_input = batch_output[:, -1, :]
+            dec_input = batch_output[:, -1:, :]
             evaluated_output = transformer_layers.evaluate(batch_input, batch_output, dec_input, transformer,
                                                            dev_accuracy)
 
