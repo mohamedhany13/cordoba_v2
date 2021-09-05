@@ -10,6 +10,7 @@ import logging
 import graphviz
 import pydot
 from matplotlib import pyplot as plt
+import statsmodels
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
 # type in NN architecture under investigation (this is to save different checkpoints for each architecture)
@@ -156,5 +157,60 @@ for i in range(len(evapo_series) - 730, len(evapo_series)):
     SES_predicted[i], SES_coefficients = SES(SES_predicted[:i], i, alpha)
 SES_MAPE = get_MAPE(evapo_series, SES_predicted, 730)
 plot_real_vs_predicted(evapo_series, SES_predicted, "SES prediction")
+
+# seasonal decomposition
+result= statsmodels.tsa.seasonal.seasonal_decompose(evapo_series, model='additive', period=365)
+residuals = evapo_series - result.seasonal
+from statsmodels.graphics import tsaplots
+plt.figure()
+pd.plotting.autocorrelation_plot(residuals)
+plt.show(block = False)
+tsaplots.plot_pacf(residuals, lags = 1095)
+plt.show(block = False)
+
+
+# plot pacf of evapotranspiration
+from statsmodels.graphics import tsaplots
+plt.figure()
+tsaplots.plot_acf(evapo_series_no_zeros.values, lags = 5000)
+plt.show(block = False)
+plt.figure()
+pd.plotting.autocorrelation_plot(evapo_series_no_zeros)
+plt.show(block = False)
+pacf_start = time.time()
+tsaplots.plot_pacf(evapo_series_no_zeros.values, lags = 1095)
+plt.show(block = False)
+pacf_time = time.time() - pacf_start
+
+# acf & pacf of seasonally differenced data
+seasonaly_diff_series = np.zeros((len(evapo_series_no_zeros) - 365))
+for i in range(len(evapo_series_no_zeros) - 365):
+    seasonaly_diff_series[i] = evapo_series_no_zeros[i + 365] - evapo_series_no_zeros[i]
+plt.figure()
+plt.plot(np.arange(len(seasonaly_diff_series)), seasonaly_diff_series, 'b', label="real")
+plt.show(block = False)
+tsaplots.plot_acf(seasonaly_diff_series, lags = 5000)
+plt.show(block = False)
+tsaplots.plot_pacf(seasonaly_diff_series, lags = 1095)
+plt.show(block = False)
+
+# acf & pacf of seasonally differenced data with first difference
+seasonaly_diff_series = np.zeros((len(evapo_series_no_zeros) - 365))
+for i in range(len(evapo_series_no_zeros) - 365):
+    seasonaly_diff_series[i] = evapo_series_no_zeros[i + 365] - evapo_series_no_zeros[i]
+sd_series_v1 = np.zeros((len(seasonaly_diff_series) - 1))
+for i in range(len(sd_series_v1)):
+    sd_series_v1[i] = seasonaly_diff_series[i + 1] - seasonaly_diff_series[i]
+plt.figure()
+plt.plot(np.arange(len(sd_series_v1)), sd_series_v1, 'b', label="blue")
+plt.show(block = False)
+tsaplots.plot_acf(sd_series_v1, lags = 5000)
+plt.show(block = False)
+tsaplots.plot_pacf(sd_series_v1, lags = 1095)
+plt.show(block = False)
+
+
+
+
 
 x = 0

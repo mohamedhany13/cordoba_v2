@@ -205,17 +205,10 @@ def accuracy_function(real, pred):
   return abs_error_per_timestep, abs_percentage_error_per_timestep, squared_error_per_timestep
 
 class enc_dec_model(tf.keras.Model):
-    def __init__(self, output_features, enc_hidden_units, att_hidden_units, enc_dropout):
+    def __init__(self, output_features, enc_hidden_units, enc_dropout, Ty):
         super().__init__()
 
-        self.enc_dec_hidden_units = enc_hidden_units
-        self.att_hidden_units = att_hidden_units
-        self.output_features = output_features
-
-        self.y_pred = None
-        self.att_weights = None
-        self.h_enc = None
-        self.h_dec = None
+        self.Ty = Ty
 
         self.enc_lstm = tf.keras.layers.LSTM(enc_hidden_units, dropout=enc_dropout, recurrent_dropout=enc_dropout,
                                              return_state= True, return_sequences= True)
@@ -223,19 +216,23 @@ class enc_dec_model(tf.keras.Model):
                                              return_state= True, return_sequences= True)
         self.final_layer = tf.keras.layers.Dense(output_features)
 
-    def call(self, input_seq, Tx, Ty):
+    def call(self, input_seq):
 
         # encoder:
         y_enc, h_enc, c_enc = self.enc_lstm(input_seq, initial_state= None)
+        y_dec_prev = input_seq[:, -1:, -1:]
 
-        y_dec_prev = input_seq[:, -1, -1]
-        y_dec_prev = tf.expand_dims(tf.expand_dims(y_dec_prev, axis = -1), axis = -1)
+        y_pred = []
+        h_dec_prev = h_enc
+        c_dec_prev = c_enc
+        for i in range(self.Ty):
+            y_dec_current, h_dec_current, c_dec_current = self.dec_lstm(y_dec_prev,
+                                                                        initial_state=[h_dec_prev, c_dec_prev])
+            h_dec_prev , c_dec_prev = h_dec_current, c_dec_current
+            y_final_current = self.final_layer(y_dec_current)
+            y_pred.append(y_final_current)
 
-        y_dec_current, h_dec_current, c_dec_current = self.dec_lstm(y_dec_prev, initial_state=[h_enc, c_enc])
-
-        y_final_current = self.final_layer(y_dec_current)
-
-        return y_final_current, 0
+        return y_final_current
 
 class attention_model(tf.keras.Model):
     def __init__(self, output_features, enc_hidden_units, att_hidden_units, enc_dropout):

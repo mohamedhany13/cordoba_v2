@@ -9,6 +9,7 @@ import pandas as pd
 import logging
 import graphviz
 import pydot
+from statsmodels.tsa.seasonal import seasonal_decompose
 from tensorflow import keras
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
@@ -25,20 +26,20 @@ linux_path = 0
 sim_mode = "train"
 
 # choose zero if you want to set it to default
-learning_rate = 0.001
+learning_rate = 0
 block_shuffle_size = 10
 
 normalize_dataset = True
-input_length = 30
-output_length = 1
-input_features = 8
+input_length = 60
+output_length = 10
+input_features = 1
 output_features = 1
 validation_split = 0.2
 test_split = 0.1
 batch_size = 64
 EPOCHS = 500
 
-lstm_units = 64
+lstm_units = 128
 attention_units = 128
 dropout_rate = 0.1
 
@@ -47,38 +48,29 @@ area_code = "06"
 series = general_methods.load_dataset(region, area_code, normalize= normalize_dataset, swap= False, OS = OS,
                                       linux_path = linux_path)
 
-normal_series = series["Co" + area_code + "ETo"]
+evapo_series = series["Co" + area_code + "ETo"]
 
-pd.plotting.autocorrelation_plot(normal_series)
-normal_series_list = normal_series.to_list()
-#series_array = np.array(normal_series_list)
-#series_array = series_array[..., np.newaxis]
+# seasonal decomposition
+result= seasonal_decompose(evapo_series.values, model='additive', period=365)
+residuals = evapo_series.values - result.seasonal
 
-n_x_train, n_y_train, _, _, _, _ = general_methods.generate_datasets_univariate(normal_series_list, 0,
+
+n_x_train, n_y_train, _, _, _, _ = general_methods.generate_datasets_univariate(evapo_series.values, 0,
                                                                                             0, input_length,
                                                                                             output_length)
 n_y_train = n_y_train[..., -1]
+
+model = lstm_att_layers.enc_dec_model(output_features, lstm_units, dropout_rate, output_length)
 """
-input_data = series_array[:-input_length]
-targets = series_array[input_length:]
-dataset = tf.keras.preprocessing.timeseries_dataset_from_array(
-    input_data, targets, sequence_length=input_length, batch_size= batch_size)
-
-for batch in dataset.take(1):
-    inputs, targets = batch
-
-print("Input shape:", inputs.numpy().shape)
-print("Target shape:", targets.numpy().shape)
-"""
-
 inputs = keras.layers.Input(shape=(n_x_train.shape[1], n_x_train.shape[2]))
 lstm_out = keras.layers.LSTM(lstm_units)(inputs)
 outputs = keras.layers.Dense(output_features)(lstm_out)
+"""
 
-model = keras.Model(inputs=inputs, outputs=outputs)
-model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate), loss="mse",
+#model = keras.Model(inputs=inputs, outputs=outputs)
+model.compile(optimizer=keras.optimizers.Adam(), loss="mse",
               metrics=["mean_absolute_percentage_error"])
-model.summary()
+#model.summary()
 
 model.fit(n_x_train, n_y_train, batch_size = batch_size, epochs=EPOCHS, validation_split= validation_split,
           verbose = 1)
